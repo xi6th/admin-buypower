@@ -1,0 +1,210 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{transaction_id}",
+ "creation": "2025-02-13 10:05:55.566360",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "event",
+  "transaction_id",
+  "transaction_reference",
+  "sessionid",
+  "site_name",
+  "column_break_zax05",
+  "transactionstatus",
+  "account_number",
+  "clientid",
+  "amount",
+  "section_break_zseal",
+  "source_account_name",
+  "createddate",
+  "source_bank_name",
+  "source_bank_code",
+  "column_break_cwhqh",
+  "destinationaccountname",
+  "destinationbankname",
+  "destinationaccountnumber",
+  "destinationbanksortcode",
+  "transaction_type",
+  "status",
+  "narration",
+  "created_at",
+  "updated_at",
+  "metadata"
+ ],
+ "fields": [
+  {
+   "fieldname": "event",
+   "fieldtype": "Data",
+   "label": "Event"
+  },
+  {
+   "fieldname": "site_name",
+   "fieldtype": "Data",
+   "label": "Site Name"
+  },
+  {
+   "fieldname": "column_break_zax05",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount"
+  },
+  {
+   "fieldname": "section_break_zseal",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "source_account_name",
+   "fieldtype": "Data",
+   "label": "Source Account Name"
+  },
+  {
+   "fieldname": "source_bank_name",
+   "fieldtype": "Data",
+   "label": "Source Bank Name"
+  },
+  {
+   "fieldname": "source_bank_code",
+   "fieldtype": "Data",
+   "label": "Source Bank Code"
+  },
+  {
+   "fieldname": "column_break_cwhqh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "transaction_type",
+   "fieldtype": "Select",
+   "label": "Transaction Type",
+   "options": "INFLOW\nOUTFLOW"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "CONFIRMED\nPENDING\nFAILED"
+  },
+  {
+   "fieldname": "narration",
+   "fieldtype": "Small Text",
+   "label": "Narration"
+  },
+  {
+   "fieldname": "created_at",
+   "fieldtype": "Data",
+   "label": "Created At"
+  },
+  {
+   "fieldname": "updated_at",
+   "fieldtype": "Data",
+   "label": "Updated At"
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "Data",
+   "label": "Metadata"
+  },
+  {
+   "fieldname": "transaction_id",
+   "fieldtype": "Int",
+   "label": "Transaction ID"
+  },
+  {
+   "fieldname": "transaction_reference",
+   "fieldtype": "Data",
+   "label": "Transaction Reference"
+  },
+  {
+   "fieldname": "sessionid",
+   "fieldtype": "Data",
+   "label": "Session ID"
+  },
+  {
+   "fieldname": "transactionstatus",
+   "fieldtype": "Data",
+   "label": "Transaction Status"
+  },
+  {
+   "fieldname": "clientid",
+   "fieldtype": "Data",
+   "label": "Account Type",
+   "options": "Client Id"
+  },
+  {
+   "fieldname": "createddate",
+   "fieldtype": "Data",
+   "label": "Created Date"
+  },
+  {
+   "fieldname": "destinationaccountname",
+   "fieldtype": "Data",
+   "label": "Destination Account Name"
+  },
+  {
+   "fieldname": "destinationbankname",
+   "fieldtype": "Data",
+   "label": "Destination Account Name"
+  },
+  {
+   "fieldname": "destinationaccountnumber",
+   "fieldtype": "Data",
+   "label": "Destination Account Number"
+  },
+  {
+   "fieldname": "destinationbanksortcode",
+   "fieldtype": "Data",
+   "label": "Destination Bank Code"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-02-13 12:12:39.360043",
+ "modified_by": "Administrator",
+ "module": "Buypower Admin",
+ "name": "Payment Log Admin",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Guest",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "track_seen": 1,
+ "track_views": 1
+}
