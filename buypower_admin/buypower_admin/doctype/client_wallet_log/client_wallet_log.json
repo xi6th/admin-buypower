@@ -71,9 +71,8 @@
   },
   {
    "fieldname": "account_type",
-   "fieldtype": "Select",
-   "label": "Account Type",
-   "options": "STATIC\nDYNAMIC"
+   "fieldtype": "Data",
+   "label": "Account Type"
   },
   {
    "fieldname": "amount",
@@ -163,7 +162,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-02-14 10:35:42.392683",
+ "modified": "2025-03-11 15:14:38.976647",
  "modified_by": "Administrator",
  "module": "Buypower Admin",
  "name": "Client Wallet Log",

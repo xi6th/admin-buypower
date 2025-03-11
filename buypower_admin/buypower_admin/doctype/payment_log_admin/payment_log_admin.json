@@ -1,124 +1,41 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:{transaction_id}",
+ "autoname": "format:{transaction_reference}",
  "creation": "2025-02-13 10:05:55.566360",
  "default_view": "List",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "event",
   "transaction_id",
   "transaction_reference",
-  "sessionid",
-  "site_name",
-  "column_break_zax05",
-  "transactionstatus",
-  "account_number",
-  "clientid",
+  "transaction_status",
+  "client_id",
+  "created_date",
+  "destination_bank_sort_code",
+  "destination_bank_name",
+  "destination_account_name",
   "amount",
-  "section_break_zseal",
-  "source_account_name",
-  "createddate",
-  "source_bank_name",
-  "source_bank_code",
-  "column_break_cwhqh",
-  "destinationaccountname",
-  "destinationbankname",
-  "destinationaccountnumber",
-  "destinationbanksortcode",
-  "transaction_type",
-  "status",
+  "currency",
   "narration",
-  "created_at",
-  "updated_at",
-  "metadata"
+  "destination_account_number"
  ],
  "fields": [
   {
-   "fieldname": "event",
-   "fieldtype": "Data",
-   "label": "Event"
-  },
-  {
-   "fieldname": "site_name",
-   "fieldtype": "Data",
-   "label": "Site Name"
-  },
-  {
-   "fieldname": "column_break_zax05",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "account_number",
-   "fieldtype": "Data",
-   "label": "Account Number"
-  },
-  {
    "fieldname": "amount",
-   "fieldtype": "Currency",
+   "fieldtype": "Data",
    "label": "Amount"
   },
   {
-   "fieldname": "section_break_zseal",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "source_account_name",
-   "fieldtype": "Data",
-   "label": "Source Account Name"
-  },
-  {
-   "fieldname": "source_bank_name",
-   "fieldtype": "Data",
-   "label": "Source Bank Name"
-  },
-  {
-   "fieldname": "source_bank_code",
-   "fieldtype": "Data",
-   "label": "Source Bank Code"
-  },
-  {
-   "fieldname": "column_break_cwhqh",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "transaction_type",
-   "fieldtype": "Select",
-   "label": "Transaction Type",
-   "options": "INFLOW\nOUTFLOW"
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "CONFIRMED\nPENDING\nFAILED"
-  },
-  {
    "fieldname": "narration",
-   "fieldtype": "Small Text",
+   "fieldtype": "Data",
    "label": "Narration"
   },
   {
-   "fieldname": "created_at",
-   "fieldtype": "Data",
-   "label": "Created At"
-  },
-  {
-   "fieldname": "updated_at",
-   "fieldtype": "Data",
-   "label": "Updated At"
-  },
-  {
-   "fieldname": "metadata",
-   "fieldtype": "Data",
-   "label": "Metadata"
-  },
-  {
    "fieldname": "transaction_id",
-   "fieldtype": "Int",
-   "label": "Transaction ID"
+   "fieldtype": "Data",
+   "label": "Transaction id"
   },
   {
    "fieldname": "transaction_reference",
@@ -126,50 +43,49 @@
    "label": "Transaction Reference"
   },
   {
-   "fieldname": "sessionid",
-   "fieldtype": "Data",
-   "label": "Session ID"
-  },
-  {
-   "fieldname": "transactionstatus",
+   "fieldname": "transaction_status",
    "fieldtype": "Data",
    "label": "Transaction Status"
   },
   {
-   "fieldname": "clientid",
+   "fieldname": "client_id",
    "fieldtype": "Data",
-   "label": "Account Type",
-   "options": "Client Id"
+   "label": "Client Id"
   },
   {
-   "fieldname": "createddate",
+   "fieldname": "created_date",
    "fieldtype": "Data",
    "label": "Created Date"
   },
   {
-   "fieldname": "destinationaccountname",
+   "fieldname": "destination_bank_sort_code",
+   "fieldtype": "Data",
+   "label": "Destination Bank Sort Code"
+  },
+  {
+   "fieldname": "destination_bank_name",
+   "fieldtype": "Data",
+   "label": "Destination Bank Name"
+  },
+  {
+   "fieldname": "destination_account_name",
    "fieldtype": "Data",
    "label": "Destination Account Name"
   },
   {
-   "fieldname": "destinationbankname",
+   "fieldname": "currency",
    "fieldtype": "Data",
-   "label": "Destination Account Name"
+   "label": "Currency"
   },
   {
-   "fieldname": "destinationaccountnumber",
+   "fieldname": "destination_account_number",
    "fieldtype": "Data",
    "label": "Destination Account Number"
-  },
-  {
-   "fieldname": "destinationbanksortcode",
-   "fieldtype": "Data",
-   "label": "Destination Bank Code"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-02-13 12:12:39.360043",
+ "modified": "2025-03-11 16:21:04.359072",
  "modified_by": "Administrator",
  "module": "Buypower Admin",
  "name": "Payment Log Admin",
