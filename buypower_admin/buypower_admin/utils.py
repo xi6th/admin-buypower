@@ -1,160 +1,177 @@
-# File: client_wallet.py
-# This file contains the admin endpoint code that receives the
-# wallet data from the client system and creates a Client Wallet record.
-
-import json
 import frappe
-import requests
+import json
+
+def safe_log_error(message, title="Log"):
+    """Safely log errors with proper title length limits"""
+    # Ensure title doesn't exceed 130 characters
+    if len(title) > 130:
+        title = title[:127] + "..."
+    
+    # Ensure message doesn't exceed reasonable limits
+    if len(str(message)) > 3000:
+        message = str(message)[:3000] + "... (truncated)"
+    
+    try:
+        frappe.log_error(message=str(message), title=title)
+    except Exception:
+        # If logging still fails, use print as fallback
+        print(f"Log failed: {title} - {str(message)[:100]}")
 
 @frappe.whitelist(allow_guest=True)
 def client_wallet():
+    """Handle wallet creation requests from client systems"""
     try:
-        # Get the incoming request data
-        data = frappe.request.get_data(as_text=True)
-        payload = json.loads(data)
+        # Get the raw request for debugging - FIXED LINE 103
+        raw_data = frappe.request.get_data(as_text=True)
+        safe_log_error(f"Raw data: {raw_data[:200]}", "Client Req")
+        
+        # Get the incoming request data - handle multiple formats
+        payload = None
+        
+        # Try JSON first
+        try:
+            payload = json.loads(raw_data)
+            safe_log_error("Successfully parsed as JSON", "Req Format")
+        except json.JSONDecodeError:
+            # Try form data
+            form_data = frappe.form_dict
+            safe_log_error(f"Form data: {dict(form_data)}", "Form Data")
+            
+            if form_data.get('event') and form_data.get('data'):
+                try:
+                    data_value = form_data.get('data')
+                    if isinstance(data_value, str):
+                        parsed_data = json.loads(data_value)
+                    else:
+                        parsed_data = data_value
+                    
+                    payload = {
+                        'event': form_data.get('event'),
+                        'data': parsed_data
+                    }
+                    safe_log_error("Successfully parsed form data", "Req Format")
+                except json.JSONDecodeError as e:
+                    safe_log_error(f"Form JSON error: {str(e)[:50]}", "Form Err")
+                    return {"success": False, "error": "Invalid JSON in form data"}
+            else:
+                safe_log_error("No valid event/data in form", "Form Err")
+                return {"success": False, "error": "Invalid request format - no event/data found"}
+
+        if not payload:
+            return {"success": False, "error": "Could not parse request data"}
+
+        # Log the parsed payload safely
+        log_payload = payload.copy()
+        if log_payload.get("data", {}).get("bvn"):
+            log_payload["data"]["bvn"] = "***masked***"
+        safe_log_error(f"Payload: {json.dumps(log_payload, indent=2)[:300]}", "Parsed Payload")
 
         # Extract the "event" and "data" fields from the payload
         event = payload.get("event")
         transaction_data = payload.get("data", {})
-
+        
+        # Validate event type
+        if event != "wallet_created":
+            return {"success": False, "error": f"Invalid event type. Expected 'wallet_created', got '{event}'"}
+        
+        # Check if required wallet data is present
+        wallet_name = transaction_data.get("wallet_name")
+        if not wallet_name:
+            return {"success": False, "error": "wallet_name is required"}
+        
+        # Get site_name from transaction data, with fallback
+        site_name = transaction_data.get("site_name", "")
+        if not site_name:
+            return {"success": False, "error": "site_name is required"}
+        
+        # Handle BVN validation more gracefully
+        bvn = transaction_data.get("bvn")
+        bvn_to_save = None
+        bvn_warning = None
+        
+        if bvn:
+            # Remove any spaces or special characters
+            bvn_clean = ''.join(filter(str.isdigit, str(bvn)))
+            
+            # Check if BVN is exactly 11 digits
+            if len(bvn_clean) == 11:
+                bvn_to_save = bvn_clean
+                safe_log_error(f"Valid BVN for wallet: {wallet_name}", "BVN Valid")
+            else:
+                # Option 1: Skip BVN and continue (more graceful)
+                bvn_warning = f"Invalid BVN provided ({len(bvn_clean)} digits), wallet created without BVN"
+                safe_log_error(bvn_warning, "BVN Warning")
+                
+                # Option 2: Return error (stricter approach)
+                # return {"success": False, "error": "BVN must be exactly 11 digits"}
+        
+        safe_log_error(f"Processing wallet: {wallet_name} for site: {site_name}", "Processing")
+        
+        # Check if a wallet with the same name already exists for this site
+        existing_wallet = frappe.db.exists("Client Wallet", {
+            "wallet_name": wallet_name,
+            "site_name": site_name
+        })
+        
+        if existing_wallet:
+            # Get existing wallet details for logging
+            existing_doc = frappe.get_doc("Client Wallet", existing_wallet)
+            safe_log_error(f"Replacing existing wallet: {wallet_name}", "Replacing")
+            
+            # Delete the existing record
+            frappe.delete_doc("Client Wallet", existing_wallet, ignore_permissions=True)
+            frappe.db.commit()
+        
         # Create a new record in the Client Wallet Doctype
-        client_wallet_doc = frappe.get_doc({
+        wallet_data = {
             "doctype": "Client Wallet",
-            "wallet_name": transaction_data.get("wallet_name"),
-            "currency": transaction_data.get("currency"),
+            "site_name": site_name,
+            "wallet_name": wallet_name,
+            "currency": transaction_data.get("currency", "NGN"),
             "wallet_id": transaction_data.get("wallet_id"),
             "description": transaction_data.get("description"),
-            "bvn": transaction_data.get("bvn"),
             "account_number": transaction_data.get("account_number"),
             "exchange_ref": transaction_data.get("exchange_ref"),
             "business_id": transaction_data.get("business_id"),
-            "account_type": transaction_data.get("account_type"),
+            "account_type": transaction_data.get("account_type", "Wallet"),
             "bank_code": transaction_data.get("bank_code"),
-            "bank_name": transaction_data.get("bank_name"),
-            "site_name": transaction_data.get("site_name")
-        })
+            "bank_name": transaction_data.get("bank_name")
+        }
+        
+        # Only add BVN if it's valid
+        if bvn_to_save:
+            wallet_data["bvn"] = bvn_to_save
+        
+        client_wallet_doc = frappe.get_doc(wallet_data)
+        
+        # Save the document
         client_wallet_doc.save(ignore_permissions=True)
         frappe.db.commit()
+        
+        # Log successful creation
+        safe_log_error(f"Successfully created Client Wallet: {wallet_name}", "Success")
 
-        return {"success": True, "message": "Wallet created successfully"}
+        response = {
+            "success": True, 
+            "message": "Wallet created successfully",
+            "wallet_data": client_wallet_doc.as_dict()
+        }
+        
+        # Add warning if BVN was invalid
+        if bvn_warning:
+            response["warning"] = bvn_warning
+        
+        return response
 
+    except json.JSONDecodeError as e:
+        safe_log_error(f"JSON decode error: {str(e)}", "JSON Error")
+        return {"success": False, "error": "Invalid JSON payload"}
+    except frappe.ValidationError as e:
+        # Handle Frappe validation errors specifically - FIXED LINE 249
+        error_msg = str(e)
+        safe_log_error(f"Validation error: {error_msg[:100]}", "Val Error")
+        return {"success": False, "error": error_msg}
     except Exception as e:
-        frappe.log_error(title="Wallet Log Error", message=str(e))
-        return {"success": False, "error": str(e)}
-
-
-@frappe.whitelist(allow_guest=True)
-def wallet_log():
-    try:
-        # Get the incoming request data
-        data = frappe.request.get_data(as_text=True)
-        payload = json.loads(data)
-
-        # Extract the "event" and "data" fields
-        event = payload.get("event")
-        transaction_data = payload.get("data", {})
-        
-        transaction_type = transaction_data.get("type")
-        if transaction_type == "INFLOW":
-
-            # Retrieve the account number from the transaction data
-            account_number = transaction_data.get("accountNumber")
-            if not account_number:
-                return {"success": False, "error": "Account number is missing in transaction data."}
-
-            # Check if a Client Wallet exists with the provided account number
-            if not frappe.db.exists("Client Wallet", {"account_number": account_number}):
-                return {"success": False, "error": f"Client Wallet with account number {account_number} does not exist."}
-
-            # Insert data into Client Wallet Log Doctype
-            wallet_log_doc = frappe.get_doc({
-                "doctype": "Client Wallet Log",
-                "event": event,
-                "transaction_id": transaction_data.get("transactionId"),
-                "transaction_reference": transaction_data.get("transactionReference"),
-                "account_exchange_reference": transaction_data.get("accountExchangeReference"),
-                "session_id": transaction_data.get("sessionId"),
-                "account_number": transaction_data.get("accountNumber"),
-                "account_type": transaction_data.get("accountType"),
-                "amount": transaction_data.get("amount"),
-                "source_account_name": transaction_data.get("sourceAccountName"),
-                "source_account_number": transaction_data.get("sourceAccountNumber"),
-                "source_bank_name": transaction_data.get("sourceBankName"),
-                "source_bank_code": transaction_data.get("sourceBankCode"),
-                "destination_account_number": transaction_data.get("destinationAccountNumber"),
-                "destination_account_name": transaction_data.get("destinationAccountName"),
-                "destination_bank_name": transaction_data.get("destinationBankName"),
-                "destination_bank_code": transaction_data.get("destinationBankCode"),
-                "transaction_type": transaction_data.get("type"),
-                "status": transaction_data.get("status"),
-                "narration": transaction_data.get("narration"),
-                "metadata": json.dumps(transaction_data.get("metadata", {}))  # Store metadata as a JSON string
-            })
-            wallet_log_doc.insert(ignore_permissions=True)
-            frappe.db.commit()
-        else:
-            # Insert data into Client Wallet Log Doctype
-            wallet_log_doc = frappe.get_doc({
-                "doctype": "Client Wallet Log",
-                "event": event,
-                "transaction_id": transaction_data.get("transactionId"),
-                "transaction_reference": transaction_data.get("transactionReference"),
-                "account_exchange_reference": transaction_data.get("accountExchangeReference"),
-                "session_id": transaction_data.get("sessionId"),
-                "account_number": transaction_data.get("accountNumber"),
-                "account_type": transaction_data.get("accountType"),
-                "amount": transaction_data.get("amount"),
-                "source_account_name": transaction_data.get("sourceAccountName"),
-                "source_account_number": transaction_data.get("sourceAccountNumber"),
-                "source_bank_name": transaction_data.get("sourceBankName"),
-                "source_bank_code": transaction_data.get("sourceBankCode"),
-                "destination_account_number": transaction_data.get("destinationAccountNumber"),
-                "destination_account_name": transaction_data.get("destinationAccountName"),
-                "destination_bank_name": transaction_data.get("destinationBankName"),
-                "destination_bank_code": transaction_data.get("destinationBankCode"),
-                "transaction_type": transaction_data.get("type"),
-                "status": transaction_data.get("status"),
-                "narration": transaction_data.get("narration"),
-                "metadata": json.dumps(transaction_data.get("metadata", {}))  # Store metadata as a JSON string
-            })
-            wallet_log_doc.insert(ignore_permissions=True)
-            frappe.db.commit()
-        
-        # Convert the document to a dictionary for further use
-        # wallet_log_data = wallet_log_doc.as_dict()
-        
-        # # Fetch the Client Wallet to get the site name
-        # client_wallet_doc = frappe.get_doc("Client Wallet", {"account_number": transaction_data.get("accountNumber")})
-        # site_name = client_wallet_doc.get("site_name")
-        
-        # # Build the admin URL using the fetched site_name
-        # post_url_admin = f"https://{site_name}/api/method/virtual_payment.virtual_payment.utils.wallet_log"
-        # admin_payload = {
-        #     "event": "wallet_created",
-        #     "data": wallet_log_data
-        # }
-        # admin_headers = {"Content-Type": "application/json"}
-        # admin_response = requests.post(post_url_admin, headers=admin_headers, json=admin_payload)
-
-        # # Accept both 200 and 201 as success codes
-        # if admin_response.status_code in [200, 201]:
-        #     admin_response_data = admin_response.json().get("message", {})
-        #     if not admin_response_data.get("success"):
-        #         frappe.log_error("Admin API response did not indicate success.", "Admin API Error")
-        #         return {"success": False, "error": "Unexpected response from Admin API."}
-        #     return {
-        #         "success": True,
-        #         "info": "Bank data saved successfully",
-        #         "wallet_response": wallet_log_data,
-        #         "admin_response": admin_response_data
-        #     }
-        # else:
-        #     error_message = (
-        #         f"Failed to POST data to Admin API. Status Code: {admin_response.status_code}, "
-        #         f"Response: {admin_response.text[:140]}"
-        #     )
-        #     frappe.log_error(error_message, "Admin API POST Error")
-        #     return {"success": False, "error": error_message}
-    except Exception as e:
-        frappe.log_error(title="Wallet Log Error", message=str(e))
-        return {"success": False, "error": str(e)}
+        error_msg = str(e)
+        safe_log_error(f"Error: {error_msg[:100]}", "Creation Error")
+        return {"success": False, "error": error_msg}

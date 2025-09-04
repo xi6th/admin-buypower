@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:{wallet_name}",
+ "autoname": "field:wallet_name",
  "creation": "2025-02-14 09:39:32.874295",
  "default_view": "List",
  "doctype": "DocType",
@@ -9,14 +9,17 @@
  "engine": "InnoDB",
  "field_order": [
   "user_info_tab",
+  "site_name",
   "wallet_name",
   "column_break_qrmbg",
   "currency",
+  "wallet_status",
   "section_break_fxty9",
   "wallet_id",
   "description",
   "column_break_ixfkr",
   "bvn",
+  "is_primary_wallet",
   "account_info_tab",
   "account_number",
   "account_type",
@@ -27,7 +30,10 @@
   "exchange_ref",
   "section_break_yssyf",
   "business_id",
-  "site_name"
+  "wallet_sequence",
+  "column_break_extra",
+  "created_by_user",
+  "creation_timestamp"
  ],
  "fields": [
   {
@@ -36,20 +42,40 @@
    "label": "User Info"
   },
   {
+   "fieldname": "site_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Site Name",
+   "options": "Site",
+   "reqd": 1
+  },
+  {
    "fieldname": "wallet_name",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Wallet Name",
-   "read_only": 1
+   "reqd": 1,
+   "unique": 1
   },
   {
    "fieldname": "column_break_qrmbg",
    "fieldtype": "Column Break"
   },
   {
+   "default": "NGN",
    "fieldname": "currency",
-   "fieldtype": "Data",
+   "fieldtype": "Select",
    "label": "Currency",
-   "read_only": 1
+   "options": "NGN\nUSD\nEUR\nGBP",
+   "reqd": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "wallet_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Wallet Status",
+   "options": "Active\nInactive\nSuspended\nClosed"
   },
   {
    "fieldname": "section_break_fxty9",
@@ -59,11 +85,12 @@
    "fieldname": "wallet_id",
    "fieldtype": "Data",
    "label": "Wallet ID",
-   "read_only": 1
+   "read_only": 1,
+   "unique": 1
   },
   {
    "fieldname": "description",
-   "fieldtype": "Data",
+   "fieldtype": "Text",
    "label": "Description"
   },
   {
@@ -77,6 +104,12 @@
    "length": 11
   },
   {
+   "default": "0",
+   "fieldname": "is_primary_wallet",
+   "fieldtype": "Check",
+   "label": "Is Primary Wallet"
+  },
+  {
    "fieldname": "account_info_tab",
    "fieldtype": "Tab Break",
    "label": "Account Info"
@@ -84,15 +117,17 @@
   {
    "fieldname": "account_number",
    "fieldtype": "Data",
+   "ignore_user_permissions": 1,
    "label": "Account Number",
-   "read_only": 1
+   "read_only": 1,
+   "unique": 1
   },
   {
+   "default": "Wallet",
    "fieldname": "account_type",
    "fieldtype": "Data",
    "label": "Account Type",
-   "options": "static",
-   "read_only": 1
+   "options": "\nStatic\nSavings\nCurrent\nFixed Deposit\nWallet"
   },
   {
    "fieldname": "column_break_j9enb",
@@ -131,19 +166,38 @@
    "read_only": 1
   },
   {
-   "fieldname": "site_name",
-   "fieldtype": "Data",
-   "label": "Site Name",
+   "description": "Auto-generated sequence number for wallets per site",
+   "fieldname": "wallet_sequence",
+   "fieldtype": "Int",
+   "label": "Wallet Sequence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_extra",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "created_by_user",
+   "fieldtype": "Link",
+   "label": "Created By User",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "now",
+   "fieldname": "creation_timestamp",
+   "fieldtype": "Datetime",
+   "label": "Creation Timestamp",
    "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-02-14 09:39:32.874295",
+ "modified": "2025-08-28 08:53:10.575745",
  "modified_by": "Administrator",
  "module": "Buypower Admin",
  "name": "Client Wallet",
- "naming_rule": "Expression",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
@@ -155,11 +209,18 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "Site Manager"
   }
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
+ "title_field": "wallet_name",
  "track_changes": 1,
  "track_seen": 1,
  "track_views": 1
