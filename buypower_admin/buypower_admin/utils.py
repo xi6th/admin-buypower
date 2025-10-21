@@ -1,5 +1,6 @@
 import frappe
 import json
+import requests
 
 def safe_log_error(message, title="Log"):
     """Safely log errors with proper title length limits"""
@@ -16,6 +17,99 @@ def safe_log_error(message, title="Log"):
     except Exception:
         # If logging still fails, use print as fallback
         print(f"Log failed: {title} - {str(message)[:100]}")
+
+
+import frappe
+import json
+import requests
+
+@frappe.whitelist(allow_guest=True)
+def wallet_log():
+    try:
+        # Get incoming request data
+        data = frappe.request.get_data(as_text=True)
+        payload = json.loads(data)
+
+        # Extract event and transaction data
+        event = payload.get("event")
+        transaction_data = payload.get("data", {})
+        account_number = transaction_data.get("accountNumber")
+
+        # Insert transaction into Purpledove Admin Log
+        wallet_log_doc = frappe.get_doc({
+            "doctype": "Purpledove Admin  Log",
+            "event": event,
+            "transaction_id": transaction_data.get("transactionId"),
+            "transaction_reference": transaction_data.get("transactionReference"),
+            "account_exchange_reference": transaction_data.get("accountExchangeReference"),
+            "session_id": transaction_data.get("sessionId"),
+            "account_number": account_number,
+            "account_type": transaction_data.get("accountType"),
+            "amount": float(transaction_data.get("amount", 0)),
+            "source_account_name": transaction_data.get("sourceAccountName"),
+            "source_account_number": transaction_data.get("sourceAccountNumber"),
+            "source_bank_name": transaction_data.get("sourceBankName"),
+            "source_bank_code": transaction_data.get("sourceBankCode"),
+            "destination_account_number": transaction_data.get("destinationAccountNumber"),
+            "destination_account_name": transaction_data.get("destinationAccountName"),
+            "destination_bank_name": transaction_data.get("destinationBankName"),
+            "destination_bank_code": transaction_data.get("destinationBankCode"),
+            "transaction_type": transaction_data.get("type"),
+            "status": transaction_data.get("status"),
+            "narration": transaction_data.get("narration"),
+            "metadata": json.dumps(transaction_data.get("metadata", {})),
+            "data_details": json.dumps(payload)
+        })
+        wallet_log_doc.insert(ignore_permissions=True)
+
+        client_wallet_info = None
+        if account_number:
+            # Fetch the Client Wallet document where account_number matches
+            wallet_list = frappe.get_all(
+                "Client Wallet",
+                filters={"account_number": account_number},
+                fields=["name", "wallet_name", "account_number", "site_name", "wallet_status"],
+                limit=1
+            )
+
+            if wallet_list:
+                client_wallet_doc = frappe.get_doc("Client Wallet", wallet_list[0].name)
+                client_wallet_info = {
+                    "name": client_wallet_doc.name,
+                    "wallet_name": client_wallet_doc.wallet_name,
+                    "account_number": client_wallet_doc.account_number,
+                    "site_name": client_wallet_doc.site_name,
+                    "wallet_status": client_wallet_doc.wallet_status
+                }
+
+                # Forward the same payload to the site's wallet_log endpoint if site_name exists
+                site_name = client_wallet_doc.site_name
+                if site_name:
+                    url = f"https://{site_name}/api/method/purpledove_payment.utils.wallet_log"
+                    try:
+                        requests.post(url, json=payload, timeout=5)
+                    except Exception as post_error:
+                        frappe.log_error(
+                            f"Failed to POST to {url}: {str(post_error)}",
+                            "Wallet Forwarding Error"
+                        )
+
+        # Return the stored data and the wallet info
+        return {
+            "success": True,
+            "message": "Data logged successfully",
+            "logged_data": payload,
+            "client_wallet": client_wallet_info
+        }
+
+    except json.JSONDecodeError:
+        return {"success": False, "error": "Invalid JSON received", "raw_data": data}
+
+    except Exception as e:
+        frappe.log_error(title="Wallet Log Error", message=str(e))
+        return {"success": False, "error": str(e)}
+
+
 
 @frappe.whitelist(allow_guest=True)
 def client_wallet():
