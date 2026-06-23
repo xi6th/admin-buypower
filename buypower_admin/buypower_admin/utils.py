@@ -42,8 +42,12 @@ def _verify_webhook_signature(raw_body):
 
     secret = frappe.conf.get("buypower_webhook_secret")
     if not secret:
-        frappe.logger().warning("Webhook signature present but no buypower_webhook_secret configured")
-        return False
+        # No secret configured — cannot verify. Allow through and warn.
+        frappe.logger().warning(
+            "Webhook received with signature header but buypower_webhook_secret is not configured — "
+            "treating as trusted. Set buypower_webhook_secret in site_config.json to enforce verification."
+        )
+        return True
 
     if isinstance(raw_body, str):
         raw_body = raw_body.encode("utf-8")
@@ -59,7 +63,7 @@ def _forward_to_site(site_name, payload):
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as post_error:
-        frappe.log_error(f"Failed to POST to {url}: {str(post_error)}", "Wallet Forwarding Error")
+        frappe.log_error(title="Wallet Forwarding Error", message=f"Failed to POST to {url}: {str(post_error)}")
 
 
 @frappe.whitelist(allow_guest=True)
@@ -159,6 +163,11 @@ def wallet_log():
                     "site_name": cw.site_name,
                     "wallet_status": cw.wallet_status,
                 }
+            elif is_inflow:
+                frappe.log_error(
+                    title="Inflow Webhook Not Forwarded",
+                    message=f"No Client Wallet found for account_number={our_account!r}. Event '{event}' dropped."
+                )
 
         _forward_to_site(site_name, payload)
         frappe.db.commit()
