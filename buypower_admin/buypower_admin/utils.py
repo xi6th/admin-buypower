@@ -96,16 +96,13 @@ def wallet_log():
         amount = float(amount_obj.get("value", 0)) if isinstance(amount_obj, dict) else float(amount_obj or 0)
         metadata = data.get("metadata", {}) or {}
 
-        is_inflow = event in ("static_account.transaction.created", "invoice.paid")
-        is_transfer = event in ("transfer.pending", "transfer.paid", "transfer.failed")
+        # Accept any event type - no restrictions
+        is_inflow = "inflow" in event.lower() or "created" in event.lower() or "paid" in event.lower()
+        is_transfer = "transfer" in event.lower() or "outflow" in event.lower()
+        transaction_type = "INFLOW" if is_inflow else ("OUTFLOW" if is_transfer else "")
 
-        # Map status -> log Select options (CONFIRMED / PENDING / FAILED)
-        raw_status = (data.get("status") or (event.split(".")[-1] if event else "")).lower()
-        status_map = {
-            "paid": "CONFIRMED", "successful": "CONFIRMED", "success": "CONFIRMED",
-            "pending": "PENDING", "processing": "PENDING", "failed": "FAILED",
-        }
-        log_status = status_map.get(raw_status, "PENDING")
+        # Use raw status from webhook (no mapping)
+        log_status = data.get("status") or (event.split(".")[-1] if event else "")
         transaction_type = "INFLOW" if is_inflow else ("OUTFLOW" if is_transfer else None)
 
         # Our reserved account: for an inflow it is the destination; for a
@@ -188,15 +185,15 @@ def wallet_log():
 
 @frappe.whitelist(allow_guest=True)
 def client_wallet():
-    """Handle wallet creation requests from client systems"""
+    """Handle wallet creation and update requests from client systems"""
     try:
         # Get the raw request for debugging - FIXED LINE 103
         raw_data = frappe.request.get_data(as_text=True)
         safe_log_error(f"Raw data: {raw_data[:200]}", "Client Req")
-        
+
         # Get the incoming request data - handle multiple formats
         payload = None
-        
+
         # Try JSON first
         try:
             payload = json.loads(raw_data)
@@ -205,7 +202,7 @@ def client_wallet():
             # Try form data
             form_data = frappe.form_dict
             safe_log_error(f"Form data: {dict(form_data)}", "Form Data")
-            
+
             if form_data.get('event') and form_data.get('data'):
                 try:
                     data_value = form_data.get('data')
@@ -213,7 +210,7 @@ def client_wallet():
                         parsed_data = json.loads(data_value)
                     else:
                         parsed_data = data_value
-                    
+
                     payload = {
                         'event': form_data.get('event'),
                         'data': parsed_data
@@ -238,11 +235,96 @@ def client_wallet():
         # Extract the "event" and "data" fields from the payload
         event = payload.get("event")
         transaction_data = payload.get("data", {})
+
+        # Handle different event types
+        if event == "wallet_deleted":
+            return _handle_wallet_deletion(transaction_data)
+        elif event == "wallet_updated":
+            return _handle_wallet_update(transaction_data)
+        elif event == "wallet_created":
+            return _handle_wallet_creation(transaction_data)
+        else:
+            return _handle_wallet_creation(transaction_data)  # Default to creation for backward compatibility
+
+    except json.JSONDecodeError as e:
+        safe_log_error(f"JSON decode error: {str(e)}", "JSON Error")
+        return {"success": False, "error": "Invalid JSON payload"}
+    except Exception as e:
+        safe_log_error(f"Error: {str(e)[:100]}", "Creation Error")
+        return {"success": False, "error": str(e)}
+
+
+def _handle_wallet_deletion(transaction_data):
+    """Handle wallet deletion from client system"""
+    try:
+        wallet_name = transaction_data.get("wallet_name")
+        account_number = transaction_data.get("account_number")
+
+        if not wallet_name or not account_number:
+            return {"success": False, "error": "wallet_name and account_number are required"}
+
+        # Find and delete the Client Wallet record
+        existing_wallet = frappe.db.exists("Client Wallet", {
+            "account_number": account_number
+        })
+
+        if existing_wallet:
+            frappe.delete_doc("Client Wallet", existing_wallet, ignore_permissions=True)
+            frappe.db.commit()
+            safe_log_error(f"Deleted wallet: {wallet_name}", "Deletion Success")
+            return {"success": True, "message": "Wallet deleted successfully"}
+        else:
+            safe_log_error(f"Wallet not found: {wallet_name}", "Deletion Skip")
+            return {"success": True, "message": "Wallet not found, already deleted"}
+
+    except Exception as e:
+        safe_log_error(f"Deletion error: {str(e)[:100]}", "Del Error")
+        return {"success": False, "error": str(e)}
+
+
+def _handle_wallet_update(transaction_data):
+    """Handle wallet update from client system"""
+    try:
+        wallet_name = transaction_data.get("wallet_name")
+        account_number = transaction_data.get("account_number")
+        site_name = transaction_data.get("site_name")
+
+        if not wallet_name or not account_number or not site_name:
+            return {"success": False, "error": "wallet_name, account_number, and site_name are required"}
+
+        # Find existing wallet by account_number (unique identifier)
+        existing_wallet_name = frappe.db.get_value("Client Wallet",
+            {"account_number": account_number}, "name")
+
+        if existing_wallet_name:
+            # Update existing wallet
+            doc = frappe.get_doc("Client Wallet", existing_wallet_name)
+
+            # Update all fields
+            fields_to_update = ['wallet_name', 'site_name', 'currency', 'wallet_id', 'description',
+                              'bvn', 'account_type', 'bank_code', 'bank_name', 'exchange_ref', 'business_id']
+
+            for field in fields_to_update:
+                if field in transaction_data:
+                    setattr(doc, field, transaction_data.get(field))
+
+            doc.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            safe_log_error(f"Updated wallet: {wallet_name} (site: {site_name})", "Update Success")
+            return {"success": True, "message": "Wallet updated successfully", "updated_fields": fields_to_update}
+        else:
+            # Wallet doesn't exist, create it
+            safe_log_error(f"Wallet not found, creating new: {wallet_name}", "Update-Create")
+            return _handle_wallet_creation(transaction_data)
+
+    except Exception as e:
+        safe_log_error(f"Update error: {str(e)[:100]}", "Update Error")
+        return {"success": False, "error": str(e)}
         
-        # Validate event type
-        if event != "wallet_created":
-            return {"success": False, "error": f"Invalid event type. Expected 'wallet_created', got '{event}'"}
-        
+def _handle_wallet_creation(transaction_data):
+    """Handle wallet creation from client system"""
+    try:
         # Check if required wallet data is present
         wallet_name = transaction_data.get("wallet_name")
         if not wallet_name:
