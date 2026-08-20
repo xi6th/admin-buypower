@@ -136,9 +136,8 @@
   },
   {
    "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "\nCONFIRMED\nPENDING\nFAILED"
+   "fieldtype": "Data",
+   "label": "Status"
   },
   {
    "fieldname": "narration",
