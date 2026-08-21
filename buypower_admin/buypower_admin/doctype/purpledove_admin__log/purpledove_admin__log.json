@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "hash",
+ "autoname": "format:{transaction_reference}-{########}",
  "creation": "2025-09-12 02:02:35.435464",
  "default_view": "List",
  "doctype": "DocType",
