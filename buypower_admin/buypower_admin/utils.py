@@ -113,30 +113,40 @@ def wallet_log():
             our_account = source.get("accountNumber") or metadata.get("source_account_number")
         our_account = our_account or data.get("accountNumber")
 
-        # Insert admin log (doctype name has a double space, kept as-is)
-        wallet_log_doc = frappe.get_doc({
-            "doctype": "Purpledove Admin  Log",
-            "event": event,
-            "transaction_reference": data.get("reference") or data.get("transactionReference"),
-            "session_id": data.get("sessionId"),
-            "account_number": our_account,
-            "account_type": data.get("type") or data.get("accountType"),
-            "amount": amount,
-            "source_account_name": source.get("accountName") or data.get("sourceAccountName"),
-            "source_account_number": source.get("accountNumber") or data.get("sourceAccountNumber"),
-            "source_bank_name": source.get("bankName") or data.get("sourceBankName"),
-            "source_bank_code": source.get("bankCode") or data.get("sourceBankCode"),
-            "destination_account_number": destination.get("accountNumber") or data.get("destinationAccountNumber"),
-            "destination_account_name": destination.get("accountName") or data.get("destinationAccountName"),
-            "destination_bank_name": destination.get("bankName") or data.get("destinationBankName"),
-            "destination_bank_code": destination.get("bankCode") or data.get("destinationBankCode"),
-            "transaction_type": transaction_type,
-            "status": log_status,
-            "narration": data.get("narration"),
-            "metadata": json.dumps(metadata),
-            "data_details": json.dumps(payload),
-        })
-        wallet_log_doc.insert(ignore_permissions=True)
+        # Get transaction reference for duplicate checking
+        transaction_reference = data.get("reference") or data.get("transactionReference")
+
+        # Check if log already exists to avoid duplicate key errors
+        existing_log = frappe.db.get_value("Purpledove Admin  Log", {"name": transaction_reference})
+        if existing_log:
+            # Log already exists, skip insertion but still forward to site
+            frappe.logger().info(f"Duplicate webhook received for transaction {transaction_reference}, skipping log insertion")
+        else:
+            # Insert admin log (doctype name has a double space, kept as-is)
+            wallet_log_doc = frappe.get_doc({
+                "doctype": "Purpledove Admin  Log",
+                "name": transaction_reference,
+                "event": event,
+                "transaction_reference": transaction_reference,
+                "session_id": data.get("sessionId"),
+                "account_number": our_account,
+                "account_type": data.get("type") or data.get("accountType"),
+                "amount": amount,
+                "source_account_name": source.get("accountName") or data.get("sourceAccountName"),
+                "source_account_number": source.get("accountNumber") or data.get("sourceAccountNumber"),
+                "source_bank_name": source.get("bankName") or data.get("sourceBankName"),
+                "source_bank_code": source.get("bankCode") or data.get("sourceBankCode"),
+                "destination_account_number": destination.get("accountNumber") or data.get("destinationAccountNumber"),
+                "destination_account_name": destination.get("accountName") or data.get("destinationAccountName"),
+                "destination_bank_name": destination.get("bankName") or data.get("destinationBankName"),
+                "destination_bank_code": destination.get("bankCode") or data.get("destinationBankCode"),
+                "transaction_type": transaction_type,
+                "status": log_status,
+                "narration": data.get("narration"),
+                "metadata": json.dumps(metadata),
+                "data_details": json.dumps(payload),
+            })
+            wallet_log_doc.insert(ignore_permissions=True)
 
         # Resolve the destination site for forwarding.
         # Transfers carry the originating site in metadata; inflows are matched
