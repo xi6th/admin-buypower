@@ -56,14 +56,31 @@ def _verify_webhook_signature(raw_body):
 
 
 def _forward_to_site(site_name, payload):
-    """Forward the webhook payload to a client site's wallet_log endpoint."""
+    """
+    Forward the webhook payload to a client site's wallet_log endpoint.
+
+    Verifies the site answered HTTP 200 and retries on failure — the client
+    site dedupes on (reference, event), so retries are safe. A reference is
+    logged to the Error Log if all attempts fail, for manual replay.
+    """
     if not site_name:
         return
     url = f"https://{site_name}/api/method/purpledove_payment.utils.wallet_log"
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as post_error:
-        frappe.log_error(title="Wallet Forwarding Error", message=f"Failed to POST to {url}: {str(post_error)}")
+    data = payload.get("data", {}) or {}
+    reference = data.get("reference") or data.get("transactionReference")
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=payload, timeout=5)
+            if resp.status_code == 200:
+                return
+            last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
+        except Exception as e:
+            last_err = str(e)[:200]
+    frappe.log_error(
+        title="Wallet Forwarding Failed",
+        message=f"Gave up forwarding to {url} (reference={reference!r}) after 3 attempts: {last_err}",
+    )
 
 
 @frappe.whitelist(allow_guest=True)
@@ -96,21 +113,28 @@ def wallet_log():
         amount = float(amount_obj.get("value", 0)) if isinstance(amount_obj, dict) else float(amount_obj or 0)
         metadata = data.get("metadata", {}) or {}
 
-        # Accept any event type - no restrictions
-        is_inflow = "inflow" in event.lower() or "created" in event.lower() or "paid" in event.lower()
-        is_transfer = "transfer" in event.lower() or "outflow" in event.lower()
-        transaction_type = "INFLOW" if is_inflow else ("OUTFLOW" if is_transfer else "")
+        # Accept any event type - no restrictions. Transfer events are checked
+        # FIRST: 'transfer.paid' contains the substring 'paid', which would
+        # otherwise classify the event as an inflow — that misrouted status
+        # webhooks (our_account resolved to the external beneficiary, the
+        # Client Wallet lookup failed, and the event was silently dropped
+        # instead of forwarded to the client site).
+        event_name = (event or "").lower()
+        is_transfer = "transfer" in event_name or "outflow" in event_name
+        is_inflow = not is_transfer and (
+            "inflow" in event_name or "created" in event_name or "paid" in event_name
+        )
+        transaction_type = "OUTFLOW" if is_transfer else ("INFLOW" if is_inflow else "")
 
         # Use raw status from webhook (no mapping)
         log_status = data.get("status") or (event.split(".")[-1] if event else "")
-        transaction_type = "INFLOW" if is_inflow else ("OUTFLOW" if is_transfer else None)
 
         # Our reserved account: for an inflow it is the destination; for a
         # transfer the source wallet (destination is the external recipient).
-        if is_inflow:
-            our_account = destination.get("accountNumber")
-        else:
+        if is_transfer:
             our_account = source.get("accountNumber") or metadata.get("source_account_number")
+        else:
+            our_account = destination.get("accountNumber")
         our_account = our_account or data.get("accountNumber")
 
         # Insert admin log (doctype name has a double space, kept as-is)
@@ -161,9 +185,9 @@ def wallet_log():
                     "site_name": cw.site_name,
                     "wallet_status": cw.wallet_status,
                 }
-            elif is_inflow:
+            elif our_account:
                 frappe.log_error(
-                    title="Inflow Webhook Not Forwarded",
+                    title="Webhook Not Forwarded",
                     message=f"No Client Wallet found for account_number={our_account!r}. Event '{event}' dropped."
                 )
 
